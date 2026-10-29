@@ -15,7 +15,7 @@ cryptography==50.0.2
 daphne==4.2.3
 distro==1.9.0
 dj-database-url==3.1.2
-Django==6.1.2
+Django==5.1.6
 docstring_parser==0.18.0
 google-auth==2.62.0
 google-genai==2.31.0
