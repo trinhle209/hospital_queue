@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+{% if not counter %}
+  <div class="card">Tài khoản chưa được gán quầy. Vào <a href="/admin/hospital/profile/">Admin → Profiles</a> để gán.</div>
+{% else %}
+
+<div id="live-area">{% include "staff_live.html" %}</div>
+
+<div class="card">
+  <h3>🎫 Bóc số giúp khách</h3>
+  <p style="margin-top:0;color:#555">Dành cho khách không có điện thoại hoặc không biết cách lấy số.</p>
+  <form method="post" action="{% url 'staff_take_ticket' %}" id="walkin-form">{% csrf_token %}
+    <label>Tên khách (không bắt buộc)</label>
+    <input type="text" name="walkin_name" maxlength="100" placeholder="VD: Bác Hai">
+    <label>Khách cần gì? (AI sẽ chọn quầy phù hợp)</label>
+    <textarea name="description" rows="2" maxlength="255" placeholder="VD: đau bụng, cần khám..."></textarea>
+    <label>Hoặc chọn dịch vụ thủ công</label>
+    <select name="service">
+      <option value="">-- Để AI tự phân loại --</option>
+      {% for s in services %}<option value="{{ s.id }}">{{ s.code }} - {{ s.name }}</option>{% endfor %}
+    </select>
+    <button class="btn green">Bóc số và in phiếu</button>
+  </form>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+{% if counter %}
+<script>
+/* Có thay đổi từ bất kỳ ai -> chỉ thay phần #live-area, KHÔNG làm mất chữ đang gõ ở form bóc số */
+let busy = false;
+async function refreshLive(){
+  if(busy) return;
+  const a = document.activeElement;
+  const area = document.getElementById('live-area');
+  if(a && a.tagName === 'SELECT' && area.contains(a)) return;   // đang mở danh sách chọn quầy
+  busy = true;
+  try{
+    const r = await fetch("{% url 'staff_live' %}", {headers:{'X-Requested-With':'fetch'}});
+    if(r.ok) area.innerHTML = await r.text();
+  }catch(e){}
+  busy = false;
+}
+let first = true;
+connectBoard(() => { if(first){ first = false; return; } refreshLive(); });
+</script>
+{% endif %}
+{% endblock %}

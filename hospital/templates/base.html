@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hàng đợi bệnh viện</title>
+<style>
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,sans-serif;background:#f3f6fb;color:#1c2733}
+  nav{background:#0b5ed7;color:#fff;padding:12px 24px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+  nav a,nav button{color:#fff;text-decoration:none;margin-left:14px;background:none;border:0;font:inherit;cursor:pointer}
+  main{max-width:1000px;margin:24px auto;padding:0 16px}
+  .card{background:#fff;border-radius:12px;padding:20px;margin-bottom:18px;box-shadow:0 1px 4px rgba(0,0,0,.08)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+  .big{font-size:56px;font-weight:700;color:#0b5ed7;margin:4px 0}
+  .btn{display:inline-block;background:#0b5ed7;color:#fff;border:0;padding:10px 18px;border-radius:8px;cursor:pointer;font-size:15px;text-decoration:none}
+  .btn.green{background:#198754}.btn.red{background:#dc3545}.btn.gray{background:#6c757d}.btn.amber{background:#b26a00}
+  input,select,textarea{width:100%;padding:10px;margin:6px 0 12px;border:1px solid #ccd;border-radius:8px;font:inherit}
+  table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #e5e9f0;text-align:left;vertical-align:top}
+  .msg{padding:10px 14px;border-radius:8px;margin-bottom:10px;background:#e7f1ff}
+  .msg.error{background:#ffe3e3}.msg.success{background:#e0f6e9}.msg.warning{background:#fff3cd}
+  .tag{display:inline-block;padding:2px 10px;border-radius:99px;background:#e7f1ff;font-size:13px}
+  .tag.green{background:#d9f2e3}.tag.amber{background:#fff0c9}.tag.red{background:#ffe0e0}.tag.gray{background:#e9ecef}
+  .bar{background:#0b5ed7;height:14px;border-radius:4px}
+  .muted{color:#5b6877}.small{font-size:13px;color:#5b6877}.err{color:#b02a37}
+  .suggest{background:#eef6ff;border:1px solid #b6d4fe;border-radius:8px;padding:10px 14px;margin:0 0 12px}
+  #live-dot{font-size:13px;margin-left:14px;opacity:.9}
+</style>
+</head>
+<body>
+<nav>
+  <strong>🏥 Hàng đợi bệnh viện</strong>
+  <div>
+    {% if user.is_authenticated %}
+      Xin chào, {{ user.username }}
+      <span id="live-dot">○ Đang kết nối...</span>
+      <a href="{% url 'display' %}" target="_blank">Màn hình TV</a>
+      {% if user.is_superuser %}<a href="/admin/">Quản lý user</a><a href="{% url 'report' %}">Báo cáo</a>{% endif %}
+      <form method="post" action="{% url 'logout' %}" style="display:inline">{% csrf_token %}<button>Đăng xuất</button></form>
+    {% endif %}
+  </div>
+</nav>
+<main>
+  {% for m in messages %}<div class="msg {{ m.tags }}">{{ m }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+<script>
+/* Kết nối WebSocket dùng chung. Tự nối lại khi rớt mạng; nếu chưa nối được vẫn lấy dữ liệu qua HTTP. */
+function connectBoard(onData){
+  let ws, retry = 0, beat;
+  const dot = document.getElementById('live-dot');
+  const setDot = ok => { if(dot){ dot.textContent = ok ? '● Trực tiếp' : '○ Đang kết nối lại...'; } };
+  function open(){
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    ws = new WebSocket(`${proto}://${location.host}/ws/board/`);
+    ws.onopen = () => { retry = 0; setDot(true); clearInterval(beat);
+      beat = setInterval(() => { if(ws.readyState === 1) ws.send(JSON.stringify({type:'ping'})); }, 25000); };
+    ws.onmessage = e => { const m = JSON.parse(e.data); if(m.type === 'board') onData(m.data); };
+    ws.onclose = () => { setDot(false); clearInterval(beat); setTimeout(open, Math.min(1000 * 2 ** retry++, 15000)); };
+    ws.onerror = () => ws.close();
+  }
+  open();
+  setInterval(async () => {
+    if(ws && ws.readyState === 1) return;
+    try{ const r = await fetch("{% url 'api_board' %}"); if(r.ok) onData(await r.json()); }catch(e){}
+  }, 10000);
+}
+</script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

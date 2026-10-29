@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card">
+  <h3>Tổng quan {{ stats.days }} ngày gần nhất</h3>
+  <div class="grid">
+    <div><div class="muted">Số lượt lấy số</div><div class="big" style="font-size:36px">{{ stats.totals.tickets }}</div></div>
+    <div><div class="muted">Đã phục vụ xong</div><div class="big" style="font-size:36px">{{ stats.totals.done }}</div></div>
+    <div><div class="muted">Bỏ lượt / hủy</div><div class="big" style="font-size:36px">{{ stats.totals.skipped }} <small class="muted" style="font-size:16px">({{ stats.totals.skip_rate }}%)</small></div></div>
+  </div>
+</div>
+
+<div class="card">
+  <h3>Thời gian xử lý theo dịch vụ</h3>
+  <table>
+    <tr><th>Dịch vụ</th><th>Số lượt</th><th>Xong</th><th>Chờ TB (phút)</th><th>Phục vụ TB (phút)</th><th>Bỏ lượt</th><th>Đánh giá</th></tr>
+    {% for r in stats.rows %}
+    <tr><td>{{ r.name }}</td><td>{{ r.total }}</td><td>{{ r.done }}</td><td>{{ r.avg_wait }}</td><td>{{ r.avg_service }}</td><td>{{ r.skipped }}</td><td>{{ r.rating }}</td></tr>
+    {% empty %}<tr><td colspan="7">Chưa có dữ liệu</td></tr>{% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h3>Hiệu suất từng quầy</h3>
+  <table>
+    <tr><th>Quầy</th><th>Số lượt đã phục vụ</th><th>Phục vụ TB (phút)</th></tr>
+    {% for c in stats.counters %}
+    <tr><td>{{ c.name }}</td><td>{{ c.served }}</td><td>{{ c.avg_service }}</td></tr>
+    {% empty %}<tr><td colspan="3">Chưa có dữ liệu</td></tr>{% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h3>Lượt lấy số theo giờ</h3>
+  {% for h in stats.hours %}
+    <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+      <span style="width:40px">{{ h.hour }}h</span>
+      <div class="bar" style="width:{% widthratio h.count max_hour 70 %}%"></div>
+      <span>{{ h.count }}</span>
+      <span class="small">(chờ TB {{ h.avg_wait }} phút)</span>
+    </div>
+  {% empty %}<p class="muted">Chưa có dữ liệu</p>{% endfor %}
+</div>
+
+<div class="card">
+  <h3>Độ chính xác của dự báo thời gian chờ</h3>
+  {% if stats.accuracy %}
+    <p>So sánh dự báo lúc lấy số với thời gian chờ thực tế của <b>{{ stats.accuracy.n }}</b> phiếu:</p>
+    <p>Sai số tuyệt đối trung bình (MAE): <b>{{ stats.accuracy.mae }} phút</b> ·
+       Độ lệch trung bình: <b>{{ stats.accuracy.bias }} phút</b>
+       <span class="small">({% if stats.accuracy.bias > 0 %}dự báo đang cao hơn thực tế{% elif stats.accuracy.bias < 0 %}dự báo đang thấp hơn thực tế{% else %}không lệch{% endif %})</span></p>
+  {% else %}<p class="muted">Chưa đủ dữ liệu.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h3>Khảo sát sau phục vụ</h3>
+  {% if stats.survey %}
+    <p>{{ stats.survey.n }} phản hồi · Hài lòng chung <b>{{ stats.survey.overall }}</b>/5 ·
+       Thời gian chờ <b>{{ stats.survey.wait }}</b>/5 · Thái độ nhân viên <b>{{ stats.survey.staff }}</b>/5</p>
+  {% else %}<p class="muted">Chưa có phản hồi nào.</p>{% endif %}
+</div>
+
+<div class="card">
+  <h3>🤖 AI tóm tắt nguyên nhân nghẽn</h3>
+  {% if summary %}<p style="white-space:pre-line">{{ summary }}</p>
+  {% else %}<a class="btn" href="?ai=1">Phân tích bằng AI</a>{% endif %}
+</div>
+{% endblock %}

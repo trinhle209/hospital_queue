@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="card" id="my-card" style="display:none">
+  <h3>Phiếu của bạn</h3>
+  <div class="big" id="my-label"></div>
+  <p id="my-service" class="muted" style="margin-top:0"></p>
+  <p id="my-info"></p>
+  <p id="my-counter" style="margin:4px 0"></p>
+  <p id="my-note" class="small" style="margin:4px 0"></p>
+  <p id="my-method" class="small" style="margin:4px 0 14px"></p>
+  {% if my %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <a class="btn gray" href="{% url 'ticket_slip' my.pk %}" target="_blank">Xem / in phiếu</a>
+    <form method="post" action="{% url 'cancel_ticket' my.pk %}" id="cancel-form" style="display:none">{% csrf_token %}
+      <button class="btn red">Hủy số</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+
+{% if not my %}
+<div class="card">
+  <h3>Lấy số mới</h3>
+  <form method="post" action="{% url 'take_ticket' %}" id="take-form">{% csrf_token %}
+    <label>Mô tả ngắn nhu cầu (AI chọn dịch vụ và gợi ý quầy ít người nhất)</label>
+    <textarea name="description" id="desc" rows="2" maxlength="255" placeholder="VD: tôi bị sốt và ho 3 ngày..."></textarea>
+    <div class="suggest" id="suggest-box" style="display:none"></div>
+    <label>Hoặc chọn dịch vụ thủ công</label>
+    <select name="service" id="svc-select">
+      <option value="">-- Để AI tự phân loại --</option>
+      {% for s in services %}<option value="{{ s.id }}">{{ s.code }} - {{ s.name }}</option>{% endfor %}
+    </select>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn gray" id="btn-suggest">Gợi ý dịch vụ và quầy</button>
+      <button class="btn" id="btn-take">Lấy số</button>
+    </div>
+    <p class="err" id="take-error" style="display:none"></p>
+  </form>
+</div>
+{% endif %}
+
+{% if to_survey %}
+<div class="card">
+  <h3>Khảo sát sau phục vụ ({{ to_survey.label }})</h3>
+  <form method="post" action="{% url 'survey_ticket' to_survey.pk %}">{% csrf_token %}
+    <label>Mức hài lòng chung</label>
+    <select name="overall">
+      <option value="5">5 - Rất hài lòng</option><option value="4">4 - Hài lòng</option>
+      <option value="3">3 - Bình thường</option><option value="2">2 - Chưa tốt</option><option value="1">1 - Rất tệ</option>
+    </select>
+    <label>Thời gian chờ</label>
+    <select name="wait_rating">
+      <option value="5">5 - Rất nhanh</option><option value="4">4 - Nhanh</option>
+      <option value="3">3 - Chấp nhận được</option><option value="2">2 - Lâu</option><option value="1">1 - Quá lâu</option>
+    </select>
+    <label>Thái độ nhân viên</label>
+    <select name="staff_rating">
+      <option value="5">5 - Rất tốt</option><option value="4">4 - Tốt</option>
+      <option value="3">3 - Bình thường</option><option value="2">2 - Chưa tốt</option><option value="1">1 - Rất tệ</option>
+    </select>
+    <label>Góp ý thêm (không bắt buộc)</label>
+    <input type="text" name="comment" maxlength="255" placeholder="VD: quầy phục vụ nhanh, hướng dẫn rõ ràng">
+    <button class="btn green">Gửi khảo sát</button>
+  </form>
+</div>
+{% endif %}
+
+<div class="card">
+  <h3>Tình hình hàng đợi (cập nhật trực tiếp)</h3>
+  <div class="grid" id="board">Đang tải...</div>
+</div>
+
+<div class="card">
+  <h3>Lịch sử gần đây</h3>
+  <table>
+    <tr><th>Số</th><th>Dịch vụ</th><th>Trạng thái</th><th>Đánh giá</th></tr>
+    {% for t in history %}
+    <tr><td>{{ t.label }}</td><td>{{ t.service.name }}</td><td>{{ t.get_status_display }}</td><td>{{ t.rating|default:"-" }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let hadTicket = false;
+
+function render(d){
+  $('board').innerHTML = d.services.map(s => `
+    <div class="card" style="margin:0">
+      <b>${esc(s.code)} - ${esc(s.name)}</b><br>
+      <span class="tag">${s.waiting} người chờ</span>
+      <span class="tag">${s.open_counters} quầy mở</span>
+      <p>Chờ dự kiến nếu lấy số bây giờ: <b>~${s.est_wait} phút</b></p>
+      <small>Đang gọi: ${s.serving.length ? s.serving.map(x => esc(x.label) + ' (' + esc(x.counter) + ')').join(', ') : '—'}</small>
+    </div>`).join('');
+
+  const card = $('my-card');
+  if(d.mine){
+    hadTicket = true;
+    const m = d.mine;
+    card.style.display = 'block';
+    $('my-label').textContent = m.label;
+    $('my-service').textContent = m.service;
+    if(m.status === 'serving'){
+      $('my-info').innerHTML = `🔔 <b>Mời đến ${esc(m.counter)}</b>`;
+      $('my-counter').textContent = '';
+      $('my-method').textContent = '';
+    } else {
+      $('my-info').innerHTML = `Phía trước còn <b>${m.ahead}</b> người · chờ dự kiến <b>~${m.est_wait} phút</b>`;
+      $('my-counter').innerHTML = m.suggested_counter ? `Quầy gợi ý: <b>${esc(m.suggested_counter)}</b>` : '';
+      $('my-method').textContent = 'Cách dự báo: ' + m.method;
+    }
+    $('my-note').textContent = m.ai_note || '';
+    const f = $('cancel-form'); if(f) f.style.display = m.status === 'waiting' ? 'block' : 'none';
+  } else if(hadTicket){
+    location.reload();   // phiếu vừa xong -> hiện khảo sát
+  }
+}
+connectBoard(render);
+
+const form = $('take-form');
+if(form){
+  const token = form.querySelector('[name=csrfmiddlewaretoken]').value;
+  const showErr = t => { const e = $('take-error'); e.textContent = t; e.style.display = t ? 'block' : 'none'; };
+
+  $('btn-suggest').addEventListener('click', async () => {
+    showErr('');
+    const description = $('desc').value.trim();
+    if(!description){ showErr('Hãy nhập mô tả ngắn về nhu cầu của bạn.'); return; }
+    const box = $('suggest-box'); box.style.display = 'block'; box.textContent = 'AI đang phân tích...';
+    try{
+      const r = await fetch("{% url 'api_classify' %}", {method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token}, body: JSON.stringify({description})});
+      const d = await r.json();
+      if(!r.ok){ box.style.display = 'none'; showErr(d.error || 'Không gợi ý được.'); return; }
+      box.innerHTML = `<b>Dịch vụ:</b> ${esc(d.service.code)} - ${esc(d.service.name)}<br>
+        <b>Quầy gợi ý:</b> ${d.counter ? esc(d.counter.name) + ' (' + esc(d.counter_note) + ')' : esc(d.counter_note)}<br>
+        <b>Chờ dự kiến:</b> ~${d.est_wait} phút (${d.ahead} người đang chờ)<br>
+        <span class="small">${esc(d.reason)}</span>`;
+    }catch(e){ box.style.display = 'none'; showErr('Lỗi kết nối, thử lại sau.'); }
+  });
+
+  form.addEventListener('submit', async e => {
+    e.preventDefault(); showErr('');
+    $('btn-take').disabled = true;
+    try{
+      const r = await fetch("{% url 'api_ticket_create' %}", {method:'POST',
+        headers:{'Content-Type':'application/json','X-CSRFToken':token},
+        body: JSON.stringify({description: $('desc').value, service: $('svc-select').value || null})});
+      const d = await r.json();
+      if(r.ok){ location.reload(); return; }
+      showErr(d.error || 'Không lấy được số.');
+    }catch(err){ showErr('Lỗi kết nối, thử lại sau.'); }
+    $('btn-take').disabled = false;
+  });
+}
+</script>
+{% endblock %}

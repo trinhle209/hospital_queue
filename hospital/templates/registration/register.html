@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card" style="max-width:420px;margin:auto">
+  <h2>Đăng ký bệnh nhân</h2>
+  <form method="post">{% csrf_token %}
+    {{ form.as_p }}
+    <button class="btn">Đăng ký</button>
+  </form>
+</div>
+{% endblock %}

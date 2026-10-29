@@ -1,0 +1,81 @@
+{% if counter %}
+<div class="card">
+  <h3>{{ counter.name }} · {{ counter.service.name }}
+    <span class="tag {% if counter.is_open %}green{% else %}red{% endif %}">{% if counter.is_open %}Đang mở{% else %}Đã đóng{% endif %}</span></h3>
+  {% if current %}
+    <div class="big">{{ current.label }}</div>
+    <p>Khách: <b>{{ current.customer_name }}</b>{% if current.is_walkin %} <span class="tag">Tại quầy</span>{% endif %}
+       · Trạng thái: <span class="tag amber">{{ current.get_status_display }}</span></p>
+    <p>Mô tả: {{ current.description|default:"(không có)" }}</p>
+    <details style="margin-bottom:12px"><summary class="small">Diễn biến phiếu ({{ current.events.all|length }})</summary>
+      <table>
+        {% for e in current.events.all %}
+        <tr><td class="small">{{ e.created_at|time:"H:i:s" }}</td>
+            <td class="small">{{ e.from_status|default:"—" }} → <b>{{ e.to_status }}</b></td>
+            <td class="small">{{ e.note }}</td></tr>
+        {% endfor %}
+      </table>
+    </details>
+  {% else %}<p>Chưa có số nào đang phục vụ.</p>{% endif %}
+
+  <form method="post" action="{% url 'staff_action' %}" style="display:flex;gap:8px;flex-wrap:wrap">{% csrf_token %}
+    <button class="btn" name="action" value="call">📢 Gọi số tiếp theo</button>
+    <button class="btn gray" name="action" value="recall">🔁 Gọi lại</button>
+    <button class="btn green" name="action" value="done">✔ Hoàn tất</button>
+    <button class="btn amber" name="action" value="skip">⏭ Bỏ lượt (vắng mặt)</button>
+    <button class="btn red" name="action" value="toggle">{% if counter.is_open %}Đóng quầy{% else %}Mở quầy{% endif %}</button>
+  </form>
+
+  {% if current %}
+  <form method="post" action="{% url 'staff_action' %}" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:14px">{% csrf_token %}
+    <select name="target" style="width:auto;min-width:260px;margin:0">
+      <option value="">-- Chuyển phiếu sang quầy... --</option>
+      {% for c in other_counters %}
+        <option value="{{ c.id }}" {% if not c.is_open %}disabled{% endif %}>{{ c.name }} · {{ c.service.name }}{% if not c.is_open %} (đóng){% endif %}</option>
+      {% endfor %}
+    </select>
+    <button class="btn gray" name="action" value="transfer">↪ Chuyển quầy</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h3>Hàng đợi ({{ waiting|length }})</h3>
+  <table>
+    <tr><th>Số</th><th>Khách</th><th>Giờ vào hàng</th><th>Mô tả</th><th>Ghi chú</th></tr>
+    {% for t in waiting %}
+    <tr>
+      <td><b>{{ t.label }}</b></td>
+      <td>{{ t.customer_name }}{% if t.is_walkin %} <span class="tag">Tại quầy</span>{% endif %}</td>
+      <td>{{ t.queued_at|time:"H:i" }}</td>
+      <td>{{ t.description }}</td>
+      <td>
+        {% if t.preferred_counter %}<span class="tag amber">Dành cho {{ t.preferred_counter.name }}</span>
+        {% elif t.suggested_counter %}<span class="small">AI gợi ý: {{ t.suggested_counter.name }}</span>{% endif %}
+        {% if t.requeue_count %}<span class="tag gray">đã chuyển/khôi phục</span>{% endif %}
+      </td>
+    </tr>
+    {% empty %}<tr><td colspan="5" class="muted">Không có ai đang chờ.</td></tr>{% endfor %}
+  </table>
+</div>
+
+{% if skipped %}
+<div class="card">
+  <h3>Đã bỏ lượt hôm nay</h3>
+  <p class="small" style="margin-top:0">Khách quay lại sau khi bị bỏ lượt: khôi phục sẽ xếp họ xuống cuối hàng đợi.</p>
+  <table>
+    {% for t in skipped %}
+    <tr>
+      <td><b>{{ t.label }}</b></td><td>{{ t.customer_name }}</td><td class="small">{{ t.finished_at|time:"H:i" }}</td>
+      <td>
+        <form method="post" action="{% url 'staff_action' %}">{% csrf_token %}
+          <input type="hidden" name="ticket" value="{{ t.id }}">
+          <button class="btn gray" name="action" value="restore" style="padding:4px 12px">Khôi phục</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endif %}

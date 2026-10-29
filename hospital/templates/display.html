@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Màn hình gọi số</title>
+<style>
+  :root{--bg:#0e2a3a;--panel:#163b50;--line:#2a5670;--text:#eaf4f8;--muted:#9fc0d0;--call:#1d6fe0;--flash:#ffe27a}
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--text);font-family:system-ui,"Segoe UI",sans-serif;display:flex;flex-direction:column;font-variant-numeric:tabular-nums}
+  header{display:flex;justify-content:space-between;align-items:center;padding:14px 32px;border-bottom:1px solid var(--line)}
+  header h1{font-size:26px;margin:0;font-weight:600}
+  header .right{display:flex;gap:16px;align-items:center;color:var(--muted);font-size:20px}
+  #clock{font-size:28px;color:var(--text)}
+  button{background:transparent;color:var(--text);border:1px solid var(--line);border-radius:8px;padding:8px 14px;font:inherit;font-size:15px;cursor:pointer}
+  main{flex:1;display:grid;grid-template-columns:1.1fr 1fr;gap:24px;padding:24px 32px;min-height:0}
+  .now{background:var(--call);border-radius:20px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;padding:24px;transition:background .3s}
+  .now.flash{background:var(--flash);color:#10202b}
+  .now .lead{font-size:clamp(22px,3vw,40px);opacity:.9}
+  .now .num{font-size:clamp(90px,16vw,230px);font-weight:800;line-height:1;margin:10px 0;letter-spacing:.02em}
+  .now .to{font-size:clamp(26px,4vw,54px);font-weight:600}
+  .side{display:flex;flex-direction:column;gap:18px;min-height:0}
+  .panel{background:var(--panel);border-radius:16px;padding:18px 20px}
+  .panel h2{margin:0 0 12px;font-size:20px;font-weight:600;color:var(--muted)}
+  .counters{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .c{border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+  .c .n{font-size:15px;color:var(--muted)}
+  .c .v{font-size:34px;font-weight:700;min-height:42px}
+  .c.off{opacity:.45}
+  .c.busy{border-color:var(--call)}
+  .svc{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid var(--line);font-size:20px}
+  .svc:last-child{border-bottom:0}
+  .recent{display:flex;gap:10px;flex-wrap:wrap}
+  .recent span{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:20px}
+  footer{padding:10px 32px;color:var(--muted);font-size:15px;border-top:1px solid var(--line)}
+  @media (max-width:900px){ main{grid-template-columns:1fr} }
+  @media (prefers-reduced-motion:reduce){ .now{transition:none} }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏥 Gọi số khám chữa bệnh</h1>
+  <div class="right">
+    <span id="status">○ Đang kết nối...</span>
+    <button id="btn-sound" type="button">🔇 Bật âm thanh</button>
+    <button id="btn-full" type="button">⛶ Toàn màn hình</button>
+    <span id="clock">--:--:--</span>
+  </div>
+</header>
+<main>
+  <section class="now" id="now">
+    <div class="lead">Mời số</div>
+    <div class="num" id="now-num">—</div>
+    <div class="to" id="now-to">Chưa có số nào được gọi</div>
+  </section>
+  <section class="side">
+    <div class="panel"><h2>Các quầy</h2><div class="counters" id="counters"></div></div>
+    <div class="panel"><h2>Số vừa gọi</h2><div class="recent" id="recent"></div></div>
+    <div class="panel"><h2>Hàng chờ theo dịch vụ</h2><div id="services"></div></div>
+  </section>
+</main>
+<footer>Vui lòng chú ý số của bạn. Quý khách có thể xem số thứ tự trên điện thoại sau khi đăng nhập.</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let soundOn = false, lastCall = null;
+
+setInterval(() => { $('clock').textContent = new Date().toLocaleTimeString('vi-VN', {hour12:false}); }, 1000);
+$('btn-full').onclick = () => document.documentElement.requestFullscreen && document.documentElement.requestFullscreen();
+$('btn-sound').onclick = () => {
+  soundOn = !soundOn;
+  $('btn-sound').textContent = soundOn ? '🔊 Đang bật âm thanh' : '🔇 Bật âm thanh';
+  if(soundOn) speak('Đã bật âm thanh gọi số');
+};
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'vi-VN'; u.rate = 0.9;
+  speechSynthesis.cancel(); speechSynthesis.speak(u);
+}
+
+function render(d){
+  const calls = d.calls || [];
+  const top = calls[0];
+  if(top){
+    $('now-num').textContent = top.label;
+    $('now-to').textContent = 'đến ' + top.counter;
+    const key = top.label + '|' + top.at;
+    if(lastCall !== null && key !== lastCall){
+      const box = $('now'); box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 3500);
+      if(soundOn){ speak(`Mời số ${top.label.split('').join(' ')} đến ${top.counter}`); }
+    }
+    lastCall = key;
+  } else { lastCall = ''; }
+
+  $('counters').innerHTML = d.counters.map(c => `
+    <div class="c ${c.is_open ? (c.current ? 'busy' : '') : 'off'}">
+      <div class="n">${esc(c.name)}</div>
+      <div class="v">${c.is_open ? esc(c.current || '—') : 'Đóng'}</div>
+    </div>`).join('');
+  $('recent').innerHTML = calls.slice(1).map(c => `<span>${esc(c.label)} → ${esc(c.counter)}</span>`).join('') || '<span>—</span>';
+  $('services').innerHTML = d.services.map(s => `
+    <div class="svc"><span>${esc(s.name)}</span><span>${s.waiting} chờ · ~${s.est_wait} phút</span></div>`).join('');
+}
+
+function connect(){
+  let ws, retry = 0;
+  const open = () => {
+    ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/board/`);
+    ws.onopen = () => { retry = 0; $('status').textContent = '● Trực tiếp'; };
+    ws.onmessage = e => { const m = JSON.parse(e.data); if(m.type === 'board') render(m.data); };
+    ws.onclose = () => { $('status').textContent = '○ Đang kết nối lại...'; setTimeout(open, Math.min(1000 * 2 ** retry++, 15000)); };
+    ws.onerror = () => ws.close();
+  };
+  open();
+  setInterval(() => { if(ws && ws.readyState === 1) ws.send(JSON.stringify({type:'ping'})); }, 25000);
+}
+connect();
+</script>
+</body>
+</html>

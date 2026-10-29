@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Phiếu số {{ ticket.label }}</title>
+<style>
+  body{font-family:system-ui,sans-serif;background:#f3f6fb;margin:0;padding:24px;display:flex;flex-direction:column;align-items:center}
+  .paper{background:#fff;width:340px;padding:24px;border:2px dashed #999;border-radius:8px;text-align:center}
+  .paper h2{margin:0 0 4px;font-size:18px}
+  .paper .svc{font-size:16px;margin:4px 0 12px}
+  .num{font-size:72px;font-weight:800;margin:8px 0;letter-spacing:2px}
+  .row{display:flex;justify-content:space-between;gap:12px;font-size:15px;margin:6px 0;text-align:left}
+  .small{font-size:12px;color:#666;margin-top:14px}
+  .method{font-size:11px;color:#777;margin-top:8px;text-align:left}
+  .actions{margin-top:20px;display:flex;gap:10px}
+  .btn{background:#0b5ed7;color:#fff;border:0;padding:12px 22px;border-radius:8px;font-size:16px;cursor:pointer;text-decoration:none}
+  .btn.gray{background:#6c757d}
+  @media print{ body{background:#fff;padding:0} .actions{display:none} .paper{border:0;width:100%} }
+</style>
+</head>
+<body>
+  <div class="paper">
+    <h2>🏥 PHIẾU SỐ THỨ TỰ</h2>
+    <div class="svc">{{ ticket.service.name }}</div>
+    <div class="num">{{ ticket.label }}</div>
+    <div class="row"><span>Khách:</span><b>{{ ticket.customer_name }}</b></div>
+    {% if ticket.status == "waiting" %}
+      <div class="row"><span>Phía trước:</span><b>{{ ahead }} người</b></div>
+      <div class="row"><span>Chờ dự kiến:</span><b>~{{ detail.minutes }} phút</b></div>
+      {% if ticket.suggested_counter %}<div class="row"><span>Quầy gợi ý:</span><b>{{ ticket.suggested_counter.name }}</b></div>{% endif %}
+    {% else %}
+      <div class="row"><span>Trạng thái:</span><b>{{ ticket.get_status_display }}</b></div>
+      {% if ticket.counter %}<div class="row"><span>Quầy:</span><b>{{ ticket.counter.name }}</b></div>{% endif %}
+    {% endif %}
+    <div class="row"><span>Giờ lấy số:</span><b>{{ ticket.created_at|date:"H:i d/m/Y" }}</b></div>
+    {% if ticket.est_wait is not None %}<div class="row"><span>Dự báo lúc lấy số:</span><b>~{{ ticket.est_wait }} phút</b></div>{% endif %}
+    {% if detail %}<div class="method">Cách dự báo: {{ detail.method }}. Có {{ detail.counters }} quầy đang mở.</div>{% endif %}
+    <div class="small">Vui lòng chú ý màn hình hoặc loa gọi số. Xin cảm ơn!</div>
+  </div>
+  <div class="actions">
+    <button class="btn" onclick="window.print()">🖨 In phiếu</button>
+    <a class="btn gray" href="{{ back_url }}">← Quay lại</a>
+  </div>
+</body>
+</html>
