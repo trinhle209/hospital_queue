@@ -33,6 +33,13 @@ def today():
     return timezone.localdate()
 
 
+def expire_stale_tickets():
+    """Phiếu của ngày hôm trước còn dang dở thì tự đóng (bỏ lượt) để không làm kẹt người dùng."""
+    Ticket.objects.filter(
+        status__in=ACTIVE, queued_at__date__lt=today()
+    ).update(status="skipped", finished_at=timezone.now())
+
+
 # =====================================================================
 # HÀNG ĐỢI
 # =====================================================================
@@ -307,6 +314,7 @@ def issue_ticket(service, description="", ai_note="", patient=None,
 
 def request_ticket(patient, service_id=None, description=""):
     """Bệnh nhân lấy số: chọn dịch vụ thủ công hoặc để AI phân loại."""
+    expire_stale_tickets()
     description = (description or "").strip()[:255]
     if Ticket.objects.filter(patient=patient, status__in=ACTIVE).exists():
         raise TicketError("Bạn đang có một số chưa hoàn tất.")

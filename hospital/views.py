@@ -71,6 +71,7 @@ def register(request):
 @login_required
 def home(request):
     profile = svc.get_profile(request.user)
+    svc.expire_stale_tickets()
     if profile.role == "staff":
         return redirect("staff_panel")
     if profile.role == "admin":
